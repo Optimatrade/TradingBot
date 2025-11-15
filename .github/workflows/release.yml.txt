@@ -1,0 +1,24 @@
+name: Create Release Asset
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build_and_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Zip source code excluding .git
+      run: |
+        zip -r tradinBot.zip . -x ".git/*"
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v1
+      with:
+        files: tradingBot.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
