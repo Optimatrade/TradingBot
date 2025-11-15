@@ -4070,13 +4070,13 @@
     let duration = 0.5; // ברירת מחדל
 
     // קביעת משך עסקה לפי חוזק האיתות והטיימפריים
-    // if (currentTf === '0.5m') {
-      // duration = 0.5;
-    // } else if (currentTf === '1m') {
+    if (currentTf === '0.5m') {
+      duration = 0.5;
+    } else if (currentTf === '1m') {
       duration = 1;
-    // } else if (currentTf === '5m') {
-      // duration = 3;
-    // }
+    } else if (currentTf === '5m') {
+      duration = 3;
+    }
 
     // מונים + 4 אחרונים
     if (kind === 'buy') buyCount++; else sellCount++;
