@@ -1,5 +1,8 @@
 name: Create Release Asset
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
@@ -14,7 +17,7 @@ jobs:
 
     - name: Zip source code excluding .git
       run: |
-        zip -r tradinBot.zip . -x ".git/*"
+        zip -r tradingBot.zip . -x ".git/*"
 
     - name: Upload Release Asset
       uses: softprops/action-gh-release@v1
