@@ -1,0 +1,9 @@
+# OpenAI API Key
+# קבל מכאן: https://platform.openai.com/api-keys
+OPENAI_API_KEY=xx
+
+# פורט השרת (אופציונלי)
+PORT=3000
+
+# הגדרות נוספות
+NODE_ENV=development

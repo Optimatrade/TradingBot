@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "OPtimatraDE Bot",
+  "version": "1.0.0",
+  "description": "PocketOption helper",
+  "permissions": [
+    "activeTab",
+    "tabs", 
+    "storage"
+  ],
+  "host_permissions": [
+    "https://pocketoption.com/*",
+    "https://www.pocketoption.com/*",
+    "https://optima-trader.com/*",
+    "<all_urls>"
+  ],
+  "action": { 
+    "default_title": "OPtimatraDE Bot"
+  },
+  "background": { 
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pocketoption.com/*",
+        "https://www.pocketoption.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": { 
+    "16": "icon.png", 
+    "48": "icon.png", 
+    "128": "icon.png" 
+  },
+  "web_accessible_resources": [
+    { 
+      "resources": ["pesel.png"], 
+      "matches": ["<all_urls>"] 
+    }
+  ],
+  "update_url": "https://optimatrade.github.io/TradingBot/update.xml"
+}
