@@ -17,11 +17,11 @@ jobs:
 
     - name: Zip source code excluding .git
       run: |
-        zip -r tradingBot.zip . -x ".git/*"
+        zip -r OptimatraDE_Trading_Bot.zip . -x ".git/*" -x ".github/*"
 
     - name: Upload Release Asset
       uses: softprops/action-gh-release@v1
       with:
-        files: tradingBot.zip
+        files: OptimatraDE_Trading_Bot.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
