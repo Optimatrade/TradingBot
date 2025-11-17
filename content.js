@@ -147,6 +147,12 @@
       waitingForNextCandle: 'מחכה לנר הבא',
       nextCandle: 'בנר הבא',
 
+      stopLossReached: 'לא ניתן לבצע עסקה - חריגה מסטופ לוס',
+      lowProfitLevel: 'לא ניתן לבצע עסקה - אחוז רווח נמוך מ-89%',
+      takeProfitReached: 'טייק פרופיט הושג - סוגר את המערכת האוטומטית',
+      automationSystemError: 'שגיאה במערכת האוטומטית',
+      
+
       // סוגי פעולות
       automatic: 'אוטומטי',
       manual: 'ידני',
@@ -287,6 +293,13 @@
       backupLevel: 'Backup level',
       waitingForNextCandle: 'Waiting for next candle',
       nextCandle: 'Next candle',
+
+
+      stopLossReached: 'Trade failed - Stop Loss exceeded',
+      lowProfitLevel: 'Trade failed - Profit % below 89%',
+      takeProfitReached: 'Take Profit reached - closing automation system',
+      automationSystemError: 'Automation system error',
+
 
       // Action types
       automatic: 'Automatic',
@@ -877,7 +890,10 @@
 
   // Anti-noise guards
   let lastSignalBarTs = null;      // מתי נשלח האיתות האחרון (חותמת זמן של הנר)
-  const MIN_COOLDOWN_SEC = 30;     // לפחות 30 שניות בין איתותים
+
+  let cooldownDurationSeconds = 30; // לפחות 30 שניות בין איתותים
+
+  const MIN_DURATION_MINUTES = 0.5; // משך מינימלי של איתות
 
   // מונים + היסטוריות
   let buyCount = 0;
@@ -894,113 +910,6 @@
   let lastCandleIndex = 0;  // אם כבר קיים אצלך, השתמש בקיים
 
   let $ = {};
-
-  /**********************
-   * PENDING SIGNAL HELPERS
-   **********************/
-
-  // יצירת מזהה איתות ויומן
-  function createSignalId() {
-    return 'sig_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
-  }
-
-  // רישום לטבלאת האיתותים
-  function logSignalPending(sig) {
-    // TODO: החלף בקריאה ל-UI שלך להוסיף שורה ל"ניתוחים/איתותים"
-    // שדות מומלצים: side, entry_timing, entry_rule, horizon, status=PENDING, createdAt
-    console.log('[SIGNAL][PENDING]', sig);
-  }
-
-  // עדכון סטטוס האיתות
-  function updateSignalStatus(signalId, status, extra = '') {
-    // TODO: עדכן את השורה הקיימת בטבלת האיתותים
-    console.log('[SIGNAL][STATUS]', signalId, status, extra);
-  }
-
-  // רישום עסקה בפועל (טבלת עסקאות) – נקלט מחיר מה-DOM ברגע הכניסה!
-  function logTradeEntryFromSignal(signalId, side, reasonTag) {
-    const entryPrice = getPriceFromDom(); // אתה כבר יודע לקרוא מחיר – השתמש בפונקציה הקיימת שלך
-    // TODO: הוסף לטבלת העסקאות: {signalId, side, entryPrice, time, reasonTag}
-    if (window.__poDebug) console.log('[TRADE][ENTER]', side, 'price=', entryPrice, 'reason=', reasonTag, 'signalId=', signalId);
-  }
-
-  // פונקציות זיהוי טריגר
-  function didTrigger(side, rule, last, prev) {
-    if (!last || !prev) return false;
-
-    if (side === 'SHORT') {
-      if (rule === 'next_red') {
-        // כניסה בתחילת נר אדום הבא – נבדוק בסגירה: אם הנר הנוכחי אדום, סימן שהיה אדום (אפשר גם בפתיחה)
-        return (last.close < last.open);
-      }
-      if (rule === 'red_breaks_prev_low') {
-        // שבירת שפל של הנר הקודם (אפשר לדרוש "סגירה מתחת" או "פריצה תוך-נרית" – כאן סגירה)
-        return (last.close < last.open) && (last.close < prev.low);
-      }
-    } else { // LONG
-      if (rule === 'next_green') {
-        return (last.close > last.open);
-      }
-      if (rule === 'green_breaks_prev_high') {
-        return (last.close > last.open) && (last.close > prev.high);
-      }
-    }
-    return false;
-  }
-
-  function isCounterPullback(side, candle) {
-    if (!candle) return false;
-    // פולבק נגד הכיוון = נר "נגד" או דשדוש קטן
-    if (side === 'SHORT') return (candle.close >= candle.open); // ירוק/דוג'י
-    return (candle.close <= candle.open);                       // אדום/דוג'י
-  }
-
-  // הערכה בכל סגירת נר (טריגרים וביצוע)
-  function onCandleCloseIntegration() {
-    if (!pendingSignal) return;
-
-    const idx = lastCandleIndex;
-    if (idx >= pendingSignal.expiresAtIndex) {
-      updateSignalStatus(pendingSignal.id, 'CANCELED (no trigger)');
-      pendingSignal = null;
-      return;
-    }
-
-    const last = candles[candles.length - 1];
-    const prev = candles[candles.length - 2];
-
-    if (pendingSignal.entry_timing === 'next') {
-      // נכניס בתחילת הנר הבא – בפועל מומלץ לסמן כניסה מיד עם פתיחת הנר,
-      // אבל אם האירוע אצלך הוא "בסגירה", זה קרוב מספיק – תוכל להזיז למקום של פתיחת נר אם קיים.
-      updateSignalStatus(pendingSignal.id, 'ENTERED (next)');
-      logTradeEntryFromSignal(pendingSignal.id, pendingSignal.side, 'GPT-next');
-      pendingSignal = null;
-      return;
-    }
-
-    if (pendingSignal.entry_timing === 'after_pullback') {
-      // 1) קודם לראות פולבק נגד הכיוון
-      if (pendingSignal.awaitedPullback === false) {
-        if (isCounterPullback(pendingSignal.side, last)) {
-          pendingSignal.awaitedPullback = true; // ראינו פולבק
-          updateSignalStatus(pendingSignal.id, 'PENDING (pullback seen)');
-          return;
-        } else {
-          // עדיין לא ראינו פולבק – מחכים
-          return;
-        }
-      }
-
-      // 2) אחרי שראינו פולבק – מחכים לטריגר
-      const hit = didTrigger(pendingSignal.side, pendingSignal.entry_rule, last, prev);
-      if (hit) {
-        updateSignalStatus(pendingSignal.id, `ENTERED (after_pullback / ${pendingSignal.entry_rule})`);
-        logTradeEntryFromSignal(pendingSignal.id, pendingSignal.side, `GPT-after_pullback/${pendingSignal.entry_rule}`);
-        pendingSignal = null;
-        return;
-      }
-    }
-  }
 
   // === PENDING SIGNAL UI ===
 
@@ -2703,21 +2612,21 @@
       const currentProfit = parseFloat((($.profitPercent.textContent || '').replace(/[^0-9.\-]/g, ''))) || null;
       if (currentProfit !== null && currentProfit < 89) {
         console.log('🚫 אחוז רווח נמוך מדי:', currentProfit + '%');
-        setSignal(`🚫 מערכת אוטומציה נעצרה - אחוז רווח: ${currentProfit}% (מינימום: 89%)`, null);
+        setSignal(t('lowProfitLevel'), null);
         return false;
       }
 
       // בדיקת סטופ לוס - אם העסקה תגרום לחריגה, לא להיכנס
       if (realBalance - nextAmount < window.automationSettings.stopLoss) {
         console.log('🚫 חריגה מסטופ לוס - יתרה:', realBalance, 'עסקה:', nextAmount, 'סטופ לוס:', window.automationSettings.stopLoss);
-        setSignal('🚫 לא ניתן לבצע עסקה - חריגה מסטופ לוס', null);
+        setSignal(t('stopLossReached'), null);
         return false;
       }
 
       // בדיקת טייק פרופיט - רק אם היתרה כבר הגיעה לטייק פרופיט
       if (realBalance >= window.automationSettings.takeProfit) {
         console.log('🚫 הגעת לטייק פרופיט - יתרה:', realBalance, 'טייק פרופיט:', window.automationSettings.takeProfit);
-        setSignal('🚫 הגעת לטייק פרופיט - מערכת אוטומציה נעצרת', null);
+        setSignal(t('takeProfitReached'), null);
         return false;
       }
 
@@ -2751,7 +2660,7 @@
 
       } catch (error) {
         console.error('שגיאה בביצוע עסקה אוטומטית:', error);
-        setSignal('❌ שגיאה בביצוע עסקה אוטומטית', null);
+        setSignal(t('automationSystemError'), null);
         return false;
       }
     }
@@ -3980,42 +3889,31 @@
 
     if (!decision || !decision.action || decision?.rsiCurrent == null) {
       setSignal('ממתין לאיתות', null);
-      uiTick();
-      return;
-    }
-
-    // נר שנסגר עכשיו (האחרון במערך)
-    const lastClosed = candles[candles.length - 1];
-    
-    if (decision.reason === 'cooldown_active') {
+    } else {
+      // נר שנסגר עכשיו (האחרון במערך)
+      const lastClosed = candles[candles.length - 1];
+      
+      // if (decision.reason === 'cooldown_active') {
       // קולדאון: לא יותר מאיתות אחד בפרק זמן סביר
       const tfSec = TIMEFRAMES[currentTf].seconds;
-      const cooldownMs = Math.max(MIN_COOLDOWN_SEC, tfSec) * 1000;
+      const cooldownMs = Math.max(cooldownDurationSeconds, tfSec) * (MAX_BACKUP_LEVEL + 1) * 1000;
       if (lastSignalBarTs && (lastClosed.t - lastSignalBarTs) < cooldownMs) {
-        // רק סטטוס למסך – אין ירי איתות
+        // בתוך הקולדאון
         const timeLeft = Math.ceil((cooldownMs - (lastClosed.t - lastSignalBarTs)) / 1000);
-        if (curr <= 30) setSignal(`${t('oversoldCooldown')} ${timeLeft}s`, 'buy');
-        else if (curr >= 70) setSignal(`${t('overboughtCooldown')} ${timeLeft}s`, 'sell');
-        else setSignal(`${t('noSignalCooldown')} ${timeLeft}s`, null);
-        return;
+        console.log(`⏳ בתוך קולדאון, לא יורה איתות. זמן שנותר: ${timeLeft}s`);
+      } else if (decision.action === 'BUY') {
+        // ירי איתות קנייה  
+        fireSignal('buy', currentRsi);
+        lastSignalBarTs = lastClosed.t;
+      } else if (decision.action === 'SELL') {
+        // ירי איתות מכירה  
+        fireSignal('sell', currentRsi);
+        lastSignalBarTs = lastClosed.t;
+      } else {
+        // אין איתות – רק סטטוס למסך
+        setSignal(t('noSignalRange'), null);
       }
-    } else if (decision.action === 'BUY') {
-      // ירי איתות קנייה  
-      fireSignal('buy', currentRsi);
-      lastSignalBarTs = lastClosed.t;
-    } else if (decision.action === 'SELL') {
-      // ירי איתות מכירה  
-      fireSignal('sell', currentRsi);
-      lastSignalBarTs = lastClosed.t;
-    } else {
-      // אין איתות – רק סטטוס למסך
-      if (currentRsi <= 30) setSignal(t('oversoldWait'), 'buy');
-      else if (currentRsi >= 70) setSignal(t('overboughtWait'), 'sell');
-      else setSignal(t('noSignalRange'), null);
     }
-
-    // בדיקת Pending Signals בכל סגירת נר
-    onCandleCloseIntegration();
 
     // עדכון UI מיד
     uiTick();
@@ -4026,7 +3924,7 @@
     try {
       const payload = {
         symbol: currentSymbol || "—",
-        timeframe: currentTf || "1m",
+        timeframe: currentTf || "0.5m",
         rsiPeriod: RSI_PERIOD, 
         candles: candles.map(c => ({ t: c.t, open: c.open, high: c.high, low: c.low, close: c.close })),
         profitPercent: getProfitPercentFromDom() || null,
@@ -4067,16 +3965,20 @@
     const priceNow = parseFloat((($.price.textContent || '').replace(/[^0-9.\-]/g, ''))) || null;
 
     // חישוב משך עסקה דינמי בהתאם לניתוח הטכני
-    let duration = 0.5; // ברירת מחדל
-
+    let duration = MIN_DURATION_MINUTES; // ברירת מחדל
+    console.log(`🚀 איתות ${kind.toUpperCase()} נורה עבור ${symbol} ב-RSI ${rsiVal} duration ${duration}`);
     // קביעת משך עסקה לפי חוזק האיתות והטיימפריים
     if (currentTf === '0.5m') {
-      duration = 0.5;
+      duration = MIN_DURATION_MINUTES;
     } else if (currentTf === '1m') {
-      duration = 1;
+      duration = MIN_DURATION_MINUTES * 2; 
     } else if (currentTf === '5m') {
-      duration = 3;
+      duration = MIN_DURATION_MINUTES * 6;
     }
+
+    console.log(`🚀 איתות ${kind.toUpperCase()} נורה עבור ${symbol} ב-RSI ${rsiVal} duration ${duration}`);
+
+    cooldownDurationSeconds = duration * 60; // עדכון משך הקולדאון
 
     // מונים + 4 אחרונים
     if (kind === 'buy') buyCount++; else sellCount++;
@@ -4254,7 +4156,7 @@
       const currentProfit = parseFloat((($.profitPercent.textContent || '').replace(/[^0-9.\-]/g, ''))) || null;
       if (currentProfit !== null && currentProfit < 89) {
         console.log('🚫 אחוז רווח נמוך מדי לביצוע אוטומטי:', currentProfit + '%');
-        setSignal(`🚫 איתות תועד אבל בוט לא נכנס - אחוז רווח: ${currentProfit}% (מינימום: 89%)`, null);
+        setSignal(t('lowProfitLevel'), null);
         console.log('📊 העסקה תתועד בטבלה אבל הבוט לא ייכנס אליה');
         return trade.id; // העסקה כבר תועדה, אבל הבוט לא ייכנס
       }
@@ -5229,7 +5131,3 @@
     return canvas;
   }
 })();
-
-// === LIGHTBOX (חלון הגדלה) ===
-// הפונקציות האלה צריכות להיות מוגדרות אחרי שה-$ מוגדר
-// הן יוגדרו בתוך ensureWidget
